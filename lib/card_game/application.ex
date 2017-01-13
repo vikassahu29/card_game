@@ -11,7 +11,7 @@ defmodule CardGame.Application do
     # Define workers and child supervisors to be supervised
     children = [
       # Starts a worker by calling: CardGame.Worker.start_link(arg1, arg2, arg3)
-      worker(CardGame.Game, [%CardGame.Game{ users: [], name: "", is_active: false, current_turn: ""}]),
+      worker(CardGame.Supervisor, []),
     ]
 
     # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html
