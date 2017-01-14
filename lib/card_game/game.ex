@@ -15,7 +15,7 @@ defmodule CardGame.Game do
     {"8", "Clubs"}, {"9", "Clubs"}, {"10", "Clubs"}, {"Jack", "Clubs"},
     {"Queen", "Clubs"}, {"King", "Clubs"}, {"Ace", "Clubs"}]
 
-  defstruct users: [], name: "", is_active: false, current_turn: "", userCards: []
+  defstruct users: [], name: "", is_active: false, current_turn: "", user_cards: [], current_trick: [], user_tricks: []
   def start_link(name) do
     GenServer.start_link(__MODULE__, %CardGame.Game{}, name: via_tuple(name))
   end
@@ -25,7 +25,7 @@ defmodule CardGame.Game do
   end
 
   def deal(name) do
-    GenServer.cast(via_tuple(name), :deal)
+    GenServer.call(via_tuple(name), :deal)
   end
 
   def play_turn(name, user, card) do
@@ -44,14 +44,6 @@ defmodule CardGame.Game do
     GenServer.call(via_tuple(name), {:get_cards, user})
   end
 
-  def handle_cast(:deal, game = %CardGame.Game{users: users, is_active: true}) do
-    if length(users) == 4 do
-      {:noreply, deal_cards(game)}
-    else
-      {:noreply, game}
-    end
-  end
-
   def handle_cast({:leave, user}, game) do
     users = game.users
     if (Enum.member?(users, user)) do
@@ -62,14 +54,26 @@ defmodule CardGame.Game do
     end
   end
 
-  def handle_call({:play_turn, user, card}, _from, game) do
-    {:reply, {user, card}, game}
+  def handle_call(:deal, _from, game = %CardGame.Game{users: users, is_active: true}) do
+    if length(users) == 4 do
+      new_game = %{deal_cards(game) | current_turn: hd(users)}
+      {:reply, {:current_turn, new_game.current_turn}, new_game}
+    else
+      {:reply, {:error, "Players not available"}, game}
+    end
+  end
+
+  def handle_call({:play_turn, user, card}, _from, game = %CardGame.Game{current_turn: user}) do
+    len = length(game.users)
+    next_user = Enum.at(game.users, rem(Enum.find_index(game.users, fn x -> x == user end) + 1, len))
+    {:reply, {user, card}, %{game | current_turn: next_user}}
   end
 
   def handle_call({:join, user}, _from, game) do
     users = game.users
-    if length(users) < 4 do
-      new_game = %{game | users: [ user | users]}
+    len = length(users)
+    if len < 4 do
+      new_game = %{game | users: [ user | users], is_active: len == 3}
       {:reply, {:ok, new_game.users}, new_game}
     else
       {:reply, {:error, "Server Full"} , game}
@@ -77,7 +81,7 @@ defmodule CardGame.Game do
   end
 
   def handle_call({:get_cards, user}, _from, game) do
-    user_cards = Enum.find(game.userCards, nil, fn(x) -> elem(x, 0) == user end)
+    user_cards = Enum.find(game.user_cards, nil, fn(x) -> elem(x, 0) == user end)
     if user_cards == nil do
       {:reply, {:error, "User not found"}, game}
     else
@@ -91,11 +95,11 @@ defmodule CardGame.Game do
   end
 
   defp deal_user(user, [], game, cards) do
-    %{game | userCards: [ {user, Enum.take(cards, 13)} | game.userCards]}
+    %{game | user_cards: [ {user, Enum.take(cards, 13)} | game.user_cards]}
   end
 
   defp deal_user(user, [x | xs], game, cards) do
-    new_game = %{game | userCards: [ {user, Enum.take(cards, 13)} | game.userCards]}
+    new_game = %{game | user_cards: [ {user, Enum.take(cards, 13)} | game.user_cards]}
     rem_cards = Enum.drop(cards, 13)
     deal_user(x, xs, new_game, rem_cards)
   end
