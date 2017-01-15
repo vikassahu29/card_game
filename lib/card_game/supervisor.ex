@@ -6,7 +6,8 @@ defmodule CardGame.Supervisor do
   end
 
   def start_room(name) do
-    Supervisor.start_child(:card_game_supervisor, [name])
+    {:ok, agent} = Agent.start_link fn -> %CardGame.Game{} end
+    Supervisor.start_child(:card_game_supervisor, [name, agent])
   end
 
   def init(_) do
